@@ -1,4 +1,5 @@
 from wordle_solver import *
+import multiprocessing
 
 #Tests a word against the win word and returns a pattern
 def test(guess, word):
@@ -29,6 +30,41 @@ def pattern_to_string(pattern):
             string_pattern+='b'
     return string_pattern
 
+def run_games(win_words, word_list, pattern_list, progress=False):
+    print(f'Running proccess testing {len(win_words)} games...')
+    game_scores = [0,0,0,0,0,0,0]
+    if progress:
+        pbar = tqdm(desc='Loading... ', total=len(win_words))
+    for win_word in win_words:
+        valid_words = word_list
+        win = False
+        guess = 'lares' # this is the best first guess determined by the algorithm
+        for i in range(0,6):
+            pattern = test(guess, win_word)
+
+            # Check if won
+            if guess == win_word:
+                win = True
+                game_scores[i]+=1
+                break
+            else: 
+                # recalculate remaining valid words, and next guess if no win
+                valid_words = find_valid_words(valid_words, guess, pattern)
+                guess = guess_word(word_list, pattern_list, valid_words, False)[1]
+        
+        # add score of 7 if it did not win
+        if win==False:
+            game_scores[-1]+=1
+            print(f'"{win_word}" game lost')
+
+        if progress:
+            pbar.update()
+    if progress:
+        pbar.close()
+    print(f'Simulation Results: {game_scores}')
+
+
+
 # Simulate all possible games and keep track of wins/losses
 if __name__ == '__main__':
 
@@ -50,33 +86,21 @@ if __name__ == '__main__':
     pattern_list = json.load(f)
     f.close()
 
-    #main loop
-    game_scores = []
-    for win_word in win_word_list:
-        print(f"\n\nNew Game [{win_word_list.index(win_word)+1}/{len(win_word_list)}]: {win_word}")
+    #simulate games on multiple cpu proccessors to speed up run time
+    num_cores=multiprocessing.cpu_count()
+    print(f'Starting {num_cores} Proccesses, simulating {len(win_word_list)} games...')
+    processes=[]
+    for i in range(num_cores):
+        start_index=i*len(win_word_list)//num_cores
+        end_index=(i+1)*len(win_word_list)//num_cores
 
-        valid_words = word_list
-        win = False
-        guess = 'lares' # this is the best first guess determined by the algorithm
-        for i in range(1,7):
-            pattern = test(guess, win_word)
-            print(f'\tGuess {i}: {guess}, Pattern: {pattern_to_string(pattern)}')
+        #add extra problems to last proccess
+        if i == num_cores - 1:
+            end_index += len(win_word_list) % num_cores
 
-            # Check if won
-            if guess == win_word:
-                win = True
-                game_scores.append(i)
-                break
-            else: 
-                # recalculate remaining valid words, and next guess if no win
-                valid_words = find_valid_words(valid_words, guess, pattern)
-                guess = guess_word(word_list, pattern_list, valid_words, True)[1]
-        
-        # add score of 7 if it did not win
-        if win==False:
-            game_scores.append(7)
-
-    #print game history data
-    num_loss=game_scores.count(7)
-    num_win = len(game_scores) - num_loss
-    print(f"win ratio: {num_win/len(game_scores):.3f}\nnumber of games won: {num_win}\nnumber of games lost: {num_loss}\nnumber of total games: {len(game_scores)}")
+        p= multiprocessing.Process(target = run_games, args=[win_word_list[start_index:end_index], word_list, pattern_list, True])
+        processes.append(p)
+        p.start()
+    for p in processes:
+        p.join()
+    print("done")
