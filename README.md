@@ -6,5 +6,8 @@ The "wordle_solver.py" will solve any wordle problem, and the "wordle_sim.py" ru
 
 Here are the Wordlex solver simulation statistic results
   Win Rate 100.00%
+  
   Average Score: 4.052
+  
   Median Score: 4
+  
